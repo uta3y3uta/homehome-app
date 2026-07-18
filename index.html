@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ていしゅつ ほめほめアプリ</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Maru Gothic ProN", "BIZ UDGothic", "Yu Gothic", sans-serif;
+    background: linear-gradient(160deg, #fef6e4 0%, #e0f7fa 100%);
+    min-height: 100vh;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; background: #ff9f43; color: #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,.15);
+    flex-wrap: wrap; gap: 8px;
+  }
+  header h1 { font-size: 1.3rem; }
+  .hbtns { display: flex; gap: 8px; }
+  .hbtn {
+    border: none; border-radius: 10px; padding: 8px 14px;
+    font-size: 1rem; cursor: pointer; font-family: inherit;
+    background: rgba(255,255,255,.9); color: #d35400; font-weight: bold;
+  }
+  .hbtn:active { transform: scale(.95); }
+  #certBtn { background: #ffe082; color: #b05c00; }
+
+  /* 曜日タブ */
+  #dayTabs {
+    display: flex; gap: 6px; padding: 12px 16px 0; flex-wrap: wrap;
+  }
+  .day-tab {
+    border: none; border-radius: 12px 12px 0 0; padding: 10px 18px;
+    font-size: 1.05rem; font-family: inherit; cursor: pointer; font-weight: bold;
+    background: #ffd9a0; color: #8a5a00;
+  }
+  .day-tab.active { background: #fff; color: #e17055; box-shadow: 0 -2px 6px rgba(0,0,0,.08); }
+
+  /* 名簿表 */
+  #tableWrap {
+    margin: 0 16px 24px; background: #fff; border-radius: 0 14px 14px 14px;
+    box-shadow: 0 4px 14px rgba(0,0,0,.1); padding: 14px; overflow-x: auto;
+  }
+  table { border-collapse: collapse; width: 100%; min-width: 480px; }
+  th, td { border: 2px solid #f0e0c8; text-align: center; }
+  thead th {
+    background: #fff3e0; color: #b05c00; padding: 10px 8px; font-size: 1rem;
+    position: sticky; top: 0;
+  }
+  th.name-col { background: #e0f2f1; color: #00695c; min-width: 110px; }
+  td.name-cell {
+    background: #f1fbfa; color: #00695c; font-weight: bold;
+    font-size: 1.1rem; padding: 8px 10px; text-align: left; white-space: nowrap;
+  }
+  td.mark-cell { padding: 0; }
+  .mark-btn {
+    width: 100%; height: 100%; min-height: 52px; border: none; cursor: pointer;
+    background: transparent; font-size: 1.4rem; font-family: inherit; color: #ccc;
+  }
+  .mark-btn.done { background: #d4f5d4; color: #27ae60; font-weight: bold; }
+  .mark-btn:active { transform: scale(.93); }
+  tr.all-done td.name-cell { background: #fff6c9; }
+  tr.all-done td.name-cell::after { content: " 🌟"; }
+
+  #summary { margin: 10px 18px; color: #8a5a00; font-weight: bold; }
+
+  /* ほめ演出 */
+  #praise {
+    position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    pointer-events: none; z-index: 50;
+  }
+  #praise span {
+    font-size: 3.2rem; font-weight: bold; color: #e17055;
+    text-shadow: 2px 2px 0 #fff, -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff;
+    animation: pop .9s ease;
+  }
+  @keyframes pop {
+    0% { transform: scale(.3); opacity: 0; }
+    40% { transform: scale(1.15); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  canvas#confetti { position: fixed; inset: 0; pointer-events: none; z-index: 40; }
+
+  /* モーダル共通 */
+  .modal {
+    position: fixed; inset: 0; background: rgba(0,0,0,.45);
+    display: none; align-items: flex-start; justify-content: center; z-index: 100;
+    overflow-y: auto; padding: 24px 12px;
+  }
+  .modal-box {
+    background: #fff; border-radius: 16px; padding: 20px; width: 100%;
+    max-width: 520px; box-shadow: 0 8px 30px rgba(0,0,0,.25);
+  }
+  .modal-box h2 { color: #d35400; margin-bottom: 12px; font-size: 1.2rem; }
+  .modal-box h3 { color: #00695c; margin: 14px 0 6px; font-size: 1.05rem; }
+  .edit-list { list-style: none; }
+  .edit-list li {
+    display: flex; align-items: center; gap: 6px; padding: 5px 0;
+    border-bottom: 1px dashed #eee; font-size: 1rem;
+  }
+  .edit-list li span.label { flex: 1; }
+  .mini {
+    border: none; background: #f0f0f0; border-radius: 6px; padding: 5px 8px;
+    cursor: pointer; font-size: .9rem; font-family: inherit;
+  }
+  .add-row { display: flex; gap: 6px; margin-top: 8px; }
+  .add-row input {
+    flex: 1; padding: 8px; border: 2px solid #ffd9a0; border-radius: 8px;
+    font-size: 1rem; font-family: inherit;
+  }
+  .add-row button {
+    border: none; background: #ff9f43; color: #fff; border-radius: 8px;
+    padding: 8px 14px; font-size: 1rem; cursor: pointer; font-family: inherit;
+  }
+  .danger {
+    margin-top: 16px; width: 100%; border: none; background: #ffe5e0; color: #c0392b;
+    border-radius: 8px; padding: 10px; font-size: .95rem; cursor: pointer; font-family: inherit;
+  }
+  .close-btn {
+    margin-top: 12px; width: 100%; border: none; background: #ff9f43; color: #fff;
+    border-radius: 10px; padding: 12px; font-size: 1.05rem; font-weight: bold;
+    cursor: pointer; font-family: inherit;
+  }
+
+  /* 賞状 */
+  #certList { margin-top: 8px; }
+  .cert {
+    border: 6px double #c9a227; border-radius: 8px; padding: 28px 20px;
+    text-align: center; margin: 14px 0; background: #fffdf3; position: relative;
+  }
+  .cert .c-title { font-size: 1.8rem; letter-spacing: .5em; color: #b8860b; font-weight: bold; }
+  .cert .c-name { font-size: 1.6rem; margin: 16px 0 10px; font-weight: bold; color: #333;
+    border-bottom: 2px solid #c9a227; display: inline-block; padding: 0 18px 4px; }
+  .cert .c-body { font-size: 1.05rem; line-height: 1.9; color: #444; }
+  .cert .c-date { margin-top: 14px; font-size: .95rem; color: #666; }
+  .cert .c-deco { position: absolute; top: 10px; left: 14px; font-size: 1.6rem; }
+  .cert .c-deco2 { position: absolute; top: 10px; right: 14px; font-size: 1.6rem; }
+  #noCert { color: #888; padding: 12px 0; }
+
+  @media print {
+    body * { visibility: hidden; }
+    #certModal, #certModal * { visibility: visible; }
+    #certModal { position: static; background: #fff; padding: 0; display: block !important; }
+    #certModal .modal-box { box-shadow: none; max-width: none; }
+    #certModal h2, #printBtn, #certClose, #noCert { display: none; }
+    .cert { page-break-after: always; margin: 0; min-height: 90vh;
+      display: flex; flex-direction: column; justify-content: center; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>🌟 ていしゅつ ほめほめアプリ</h1>
+  <div class="hbtns">
+    <button class="hbtn" id="certBtn">🏆 しょうじょう</button>
+    <button class="hbtn" id="resetBtn">🔄 リセット</button>
+    <button class="hbtn" id="settingsBtn">⚙️ せってい</button>
+  </div>
+</header>
+
+<div id="dayTabs"></div>
+<div id="tableWrap">
+  <table id="rosterTable">
+    <thead id="tHead"></thead>
+    <tbody id="tBody"></tbody>
+  </table>
+</div>
+<div id="summary"></div>
+
+<div id="praise"><span id="praiseText"></span></div>
+<canvas id="confetti"></canvas>
+
+<!-- せってい -->
+<div class="modal" id="settingsModal">
+  <div class="modal-box">
+    <h2>⚙️ せってい</h2>
+    <h3>👦 なまえ（名簿）</h3>
+    <ul class="edit-list" id="nameList"></ul>
+    <div class="add-row">
+      <input id="nameInput" placeholder="なまえを入力">
+      <button id="nameAdd">追加</button>
+    </div>
+    <h3>📚 しゅくだいの種類（横軸）</h3>
+    <ul class="edit-list" id="hwList"></ul>
+    <div class="add-row">
+      <input id="hwInput" placeholder="例：日記">
+      <button id="hwAdd">追加</button>
+    </div>
+    <h3>📅 曜日（タブ）</h3>
+    <ul class="edit-list" id="dayList"></ul>
+    <div class="add-row">
+      <input id="dayInput" placeholder="例：土曜日">
+      <button id="dayAdd">追加</button>
+    </div>
+    <button class="danger" id="clearAll">⚠️ すべての提出記録を消す（週の最初に）</button>
+    <button class="close-btn" id="settingsClose">とじる</button>
+  </div>
+</div>
+
+<!-- 賞状 -->
+<div class="modal" id="certModal">
+  <div class="modal-box">
+    <h2>🏆 かんぺき賞（1週間ぜんぶ出せた子）</h2>
+    <button class="close-btn" id="printBtn" style="background:#27ae60">🖨️ いんさつする</button>
+    <div id="certList"></div>
+    <button class="close-btn" id="certClose">とじる</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+const PRAISES = ["やったね！","すごい！","えらい！","がんばったね！","さすが！","かんぺき！","ナイス！","すてき！"];
+const DEFAULT = {
+  names: ["さくら","ひなた","りく","ゆい","そうた","あかり","はると","めい"],
+  homeworks: ["漢字ノート","音読カード","算数プリント"],
+  days: ["月曜日","火曜日","水曜日","木曜日","金曜日"],
+  done: {},
+  activeDay: 0
+};
+let state;
+try {
+  state = JSON.parse(localStorage.getItem("homehome2"));
+} catch (e) { state = null; }
+if (!state || !state.names || !state.days) state = JSON.parse(JSON.stringify(DEFAULT));
+if (state.activeDay >= state.days.length) state.activeDay = 0;
+
+function save() { localStorage.setItem("homehome2", JSON.stringify(state)); }
+function isDone(day, hw, name) {
+  return !!(state.done[day] && state.done[day][hw] && state.done[day][hw][name]);
+}
+function setDone(day, hw, name, v) {
+  if (!state.done[day]) state.done[day] = {};
+  if (!state.done[day][hw]) state.done[day][hw] = {};
+  if (v) state.done[day][hw][name] = true;
+  else delete state.done[day][hw][name];
+  save();
+}
+
+/* ---------- 描画 ---------- */
+function render() {
+  renderTabs();
+  renderTable();
+  renderSummary();
+}
+function renderTabs() {
+  const wrap = document.getElementById("dayTabs");
+  wrap.innerHTML = "";
+  state.days.forEach((d, i) => {
+    const b = document.createElement("button");
+    b.className = "day-tab" + (i === state.activeDay ? " active" : "");
+    b.textContent = d;
+    b.onclick = () => { state.activeDay = i; save(); render(); };
+    wrap.appendChild(b);
+  });
+}
+function renderTable() {
+  const day = state.days[state.activeDay];
+  const thead = document.getElementById("tHead");
+  const tbody = document.getElementById("tBody");
+  thead.innerHTML = "";
+  tbody.innerHTML = "";
+  const hr = document.createElement("tr");
+  const th0 = document.createElement("th");
+  th0.className = "name-col";
+  th0.textContent = "なまえ";
+  hr.appendChild(th0);
+  state.homeworks.forEach(hw => {
+    const th = document.createElement("th");
+    th.textContent = hw;
+    hr.appendChild(th);
+  });
+  thead.appendChild(hr);
+
+  state.names.forEach(name => {
+    const tr = document.createElement("tr");
+    const tdn = document.createElement("td");
+    tdn.className = "name-cell";
+    tdn.textContent = name;
+    tr.appendChild(tdn);
+    let all = state.homeworks.length > 0;
+    state.homeworks.forEach(hw => {
+      const td = document.createElement("td");
+      td.className = "mark-cell";
+      const btn = document.createElement("button");
+      const d = isDone(day, hw, name);
+      if (!d) all = false;
+      btn.className = "mark-btn" + (d ? " done" : "");
+      btn.textContent = d ? "✓ できた！" : "－";
+      btn.onclick = () => toggle(day, hw, name, btn);
+      td.appendChild(btn);
+      tr.appendChild(td);
+    });
+    if (all) tr.className = "all-done";
+    tbody.appendChild(tr);
+  });
+}
+function renderSummary() {
+  const day = state.days[state.activeDay];
+  let total = state.names.length * state.homeworks.length;
+  let cnt = 0;
+  state.names.forEach(n => state.homeworks.forEach(h => { if (isDone(day, h, n)) cnt++; }));
+  const el = document.getElementById("summary");
+  el.textContent = day + "：" + cnt + " / " + total +
+    (total > 0 && cnt === total ? "　🎉 ぜんいん だせました！すごい！" : "");
+}
+
+/* ---------- タップ ---------- */
+function toggle(day, hw, name, btn) {
+  if (isDone(day, hw, name)) {
+    if (confirm(name + " さんの「" + hw + "」を とりけしますか？（押しまちがい用）")) {
+      setDone(day, hw, name, false);
+      render();
+    }
+    return;
+  }
+  setDone(day, hw, name, true);
+  render();
+  showPraise();
+  burstConfetti();
+}
+function showPraise() {
+  const p = document.getElementById("praise");
+  document.getElementById("praiseText").textContent =
+    PRAISES[Math.floor(Math.random() * PRAISES.length)];
+  p.style.display = "flex";
+  clearTimeout(showPraise._t);
+  showPraise._t = setTimeout(() => { p.style.display = "none"; }, 1100);
+}
+
+/* ---------- 紙吹雪 ---------- */
+const cv = document.getElementById("confetti");
+const ctx = cv.getContext("2d");
+let pieces = [];
+function sizeCanvas() { cv.width = innerWidth; cv.height = innerHeight; }
+sizeCanvas();
+addEventListener("resize", sizeCanvas);
+function burstConfetti() {
+  const colors = ["#ff6b6b","#feca57","#48dbfb","#1dd1a1","#f368e0","#ff9f43"];
+  for (let i = 0; i < 90; i++) {
+    pieces.push({
+      x: Math.random() * cv.width, y: -20 - Math.random() * 80,
+      w: 6 + Math.random() * 8, h: 6 + Math.random() * 8,
+      c: colors[Math.floor(Math.random() * colors.length)],
+      vy: 2 + Math.random() * 3.5, vx: -1.5 + Math.random() * 3,
+      r: Math.random() * Math.PI, vr: -0.2 + Math.random() * 0.4
+    });
+  }
+  if (!burstConfetti._on) { burstConfetti._on = true; requestAnimationFrame(tick); }
+}
+function tick() {
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  pieces.forEach(p => {
+    p.x += p.vx; p.y += p.vy; p.r += p.vr;
+    ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r);
+    ctx.fillStyle = p.c; ctx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
+    ctx.restore();
+  });
+  pieces = pieces.filter(p => p.y < cv.height + 30);
+  if (pieces.length) requestAnimationFrame(tick);
+  else { burstConfetti._on = false; ctx.clearRect(0, 0, cv.width, cv.height); }
+}
+
+/* ---------- 賞状 ---------- */
+function perfectKids() {
+  return state.names.filter(n =>
+    state.days.every(d => state.homeworks.every(h => isDone(d, h, n)))
+  );
+}
+document.getElementById("certBtn").onclick = () => {
+  const kids = perfectKids();
+  const list = document.getElementById("certList");
+  list.innerHTML = "";
+  if (kids.length === 0) {
+    const p = document.createElement("p");
+    p.id = "noCert";
+    p.textContent = "まだ1週間ぜんぶ出せた子はいません。（" +
+      state.days.join("・") + " の すべての宿題が ✓ になると 賞状が出ます）";
+    list.appendChild(p);
+  } else {
+    const today = new Date();
+    const dateStr = today.getFullYear() + "年" + (today.getMonth()+1) + "月" + today.getDate() + "日";
+    kids.forEach(n => {
+      const div = document.createElement("div");
+      div.className = "cert";
+      div.innerHTML = '<div class="c-deco">🌟</div><div class="c-deco2">🌟</div><div class="c-title">賞　状</div>';
+      const nm = document.createElement("div"); nm.className = "c-name"; nm.textContent = n + " さん";
+      div.appendChild(nm);
+      const bd = document.createElement("div"); bd.className = "c-body";
+      const bodyText = "あなたは 1しゅうかん（" + state.days.join("・") + "）\nまいにち わすれずに しゅくだいを だしました。\nそのどりょくを たたえ ここに しょうします。";
+      bodyText.split("\n").forEach(line => {
+        const l = document.createElement("div"); l.textContent = line; bd.appendChild(l);
+      });
+      div.appendChild(bd);
+      const dt = document.createElement("div"); dt.className = "c-date"; dt.textContent = dateStr + "　🏆 かんぺき賞";
+      div.appendChild(dt);
+      list.appendChild(div);
+    });
+  }
+  document.getElementById("certModal").style.display = "flex";
+};
+document.getElementById("printBtn").onclick = () => {
+  if (perfectKids().length === 0) { alert("いんさつできる賞状がありません。"); return; }
+  window.print();
+};
+document.getElementById("certClose").onclick = () =>
+  document.getElementById("certModal").style.display = "none";
+
+/* ---------- リセット ---------- */
+document.getElementById("resetBtn").onclick = () => {
+  const day = state.days[state.activeDay];
+  if (confirm("「" + day + "」の記録をぜんぶ消しますか？")) {
+    delete state.done[day];
+    save(); render();
+  }
+};
+
+/* ---------- せってい ---------- */
+const sModal = document.getElementById("settingsModal");
+document.getElementById("settingsBtn").onclick = () => { renderSettings(); sModal.style.display = "flex"; };
+document.getElementById("settingsClose").onclick = () => { sModal.style.display = "none"; render(); };
+
+function renameInDone(kind, oldName, newName) {
+  Object.keys(state.done).forEach(d => {
+    if (kind === "day" && d === oldName) {
+      state.done[newName] = state.done[d]; delete state.done[d]; return;
+    }
+    Object.keys(state.done[d]).forEach(h => {
+      if (kind === "hw" && h === oldName) {
+        state.done[d][newName] = state.done[d][h]; delete state.done[d][h]; return;
+      }
+      if (kind === "name" && state.done[d][h][oldName]) {
+        state.done[d][h][newName] = true; delete state.done[d][h][oldName];
+      }
+    });
+  });
+}
+function removeFromDone(kind, val) {
+  Object.keys(state.done).forEach(d => {
+    if (kind === "day" && d === val) { delete state.done[d]; return; }
+    Object.keys(state.done[d]).forEach(h => {
+      if (kind === "hw" && h === val) { delete state.done[d][h]; return; }
+      if (kind === "name") delete state.done[d][h][val];
+    });
+  });
+}
+
+function buildList(ulId, arr, kind) {
+  const ul = document.getElementById(ulId);
+  ul.innerHTML = "";
+  arr.forEach((item, i) => {
+    const li = document.createElement("li");
+    const sp = document.createElement("span");
+    sp.className = "label"; sp.textContent = item;
+    li.appendChild(sp);
+    const mk = (txt, fn) => {
+      const b = document.createElement("button");
+      b.className = "mini"; b.textContent = txt; b.onclick = fn;
+      li.appendChild(b);
+    };
+    mk("↑", () => { if (i > 0) { [arr[i-1], arr[i]] = [arr[i], arr[i-1]]; save(); renderSettings(); } });
+    mk("↓", () => { if (i < arr.length-1) { [arr[i+1], arr[i]] = [arr[i], arr[i+1]]; save(); renderSettings(); } });
+    mk("✏️", () => {
+      const v = prompt("新しい名前", item);
+      if (v && v.trim() && v.trim() !== item) {
+        const nv = v.trim();
+        if (arr.includes(nv)) { alert("同じ名前があります"); return; }
+        renameInDone(kind, item, nv);
+        arr[i] = nv; save(); renderSettings();
+      }
+    });
+    mk("🗑️", () => {
+      if (arr.length <= 1) { alert("最低1つは必要です"); return; }
+      if (confirm("「" + item + "」を消しますか？記録も消えます。")) {
+        removeFromDone(kind, item);
+        arr.splice(i, 1);
+        if (kind === "day" && state.activeDay >= state.days.length) state.activeDay = 0;
+        save(); renderSettings();
+      }
+    });
+    ul.appendChild(li);
+  });
+}
+function addItem(inputId, arr) {
+  const inp = document.getElementById(inputId);
+  const v = inp.value.trim();
+  if (!v) return;
+  if (arr.includes(v)) { alert("同じ名前があります"); return; }
+  arr.push(v); inp.value = "";
+  save(); renderSettings();
+}
+function renderSettings() {
+  buildList("nameList", state.names, "name");
+  buildList("hwList", state.homeworks, "hw");
+  buildList("dayList", state.days, "day");
+}
+document.getElementById("nameAdd").onclick = () => addItem("nameInput", state.names);
+document.getElementById("hwAdd").onclick = () => addItem("hwInput", state.homeworks);
+document.getElementById("dayAdd").onclick = () => addItem("dayInput", state.days);
+["nameInput","hwInput","dayInput"].forEach((id, idx) => {
+  document.getElementById(id).addEventListener("keydown", e => {
+    if (e.key === "Enter") addItem(id, [state.names, state.homeworks, state.days][idx]);
+  });
+});
+document.getElementById("clearAll").onclick = () => {
+  if (confirm("すべての提出記録を消しますか？（名簿・宿題・曜日は残ります）")) {
+    state.done = {}; save(); renderSettings(); render();
+  }
+};
+
+render();
+</script>
+</body>
+</html>
